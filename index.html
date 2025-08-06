@@ -59,7 +59,7 @@
         <nav class="absolute top-0 right-0 p-6 z-10">
             <a href="#about" class="mx-2 text-lg font-semibold text-gray-300 hover:text-cyan-400 transition-colors">About</a>
             <a href="#contact" class="mx-2 text-lg font-semibold text-gray-300 hover:text-cyan-400 transition-colors">Contact</a>
-            <button id="open-register-nav" class="mx-2 text-lg font-semibold text-gray-300 hover:text-cyan-400 transition-colors">Register</button>
+            <button id="open-register-nav" class="mx-2 text-lg font-semibold text-gray-300 hover:text-cyan-400 transition-colors">Enter Bingo</button>
         </nav>
         
         <div class="text-center">
@@ -133,16 +133,18 @@
             
             <form id="registration-form">
                 <div class="space-y-4 text-left">
-                    <input type="text" id="name-input" placeholder="Full Name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
-                    <input type="text" id="course-input" placeholder="Course (e.g., B.Tech CSE)" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
-                    <input type="text" id="semester-input" placeholder="Semester" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
-                    <input type="text" id="rollno-input" placeholder="Roll No." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
+                    <input type="text" name="Name" placeholder="Full Name" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
+                    <input type="email" name="Email" placeholder="Email ID" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
+                    <input type="text" name="Course" placeholder="Course (e.g., B.Tech CSE)" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
+                    <input type="text" name="Semester" placeholder="Semester" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
+                    <input type="text" name="RollNo" placeholder="Roll No." class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500" required>
                 </div>
                 <button type="submit" class="w-full mt-8 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 transform hover:scale-105 shadow-lg shadow-fuchsia-500/20">
-                    Register Now
+                    Enter Bingo
                 </button>
             </form>
-            <p id="success-message" class="mt-4 text-green-400 hidden">Registration successful! We'll see you there.</p>
+            <p id="success-message" class="mt-4 text-green-400 hidden">Registration successful! Redirecting to Bingo...</p>
+            <p id="error-message" class="mt-4 text-red-400 hidden"></p>
         </div>
     </div>
     
@@ -160,9 +162,13 @@
         const openRegisterMain = document.getElementById('open-register-main');
         const registrationForm = document.getElementById('registration-form');
         const successMessage = document.getElementById('success-message');
+        const errorMessage = document.getElementById('error-message');
+
+        const sheetBestUrl = "https://api.sheetbest.com/sheets/6980474d-e006-4f19-bf77-9a702862b3ca";
 
         // --- Pop-up Modal Logic ---
         function showPopup() {
+            errorMessage.classList.add('hidden'); // Hide error on open
             registerPopup.classList.remove('hidden');
             registerPopup.classList.add('animate-fadeIn');
             popupContent.classList.add('animate-popUp');
@@ -184,19 +190,73 @@
         closePopupButton.addEventListener('click', hidePopup);
         
         // --- Registration Form Logic ---
-        registrationForm.addEventListener('submit', (e) => {
+        registrationForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            console.log('Registration Data:', {
-                name: document.getElementById('name-input').value,
-                course: document.getElementById('course-input').value,
-                semester: document.getElementById('semester-input').value,
-                rollNo: document.getElementById('rollno-input').value,
-            });
-            
-            registrationForm.style.display = 'none';
-            successMessage.classList.remove('hidden');
+            const submitButton = registrationForm.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = 'Verifying...';
+            errorMessage.classList.add('hidden');
 
-            setTimeout(hidePopup, 3000);
+            const formData = new FormData(registrationForm);
+            const data = Object.fromEntries(formData.entries());
+            const userEmail = data.Email.trim().toLowerCase();
+            const userRollNo = data.RollNo.trim().toLowerCase();
+
+            try {
+                // 1. Fetch existing data to check for duplicates
+                const responseGet = await fetch(sheetBestUrl);
+                if (!responseGet.ok) {
+                    throw new Error("Could not check existing registrations.");
+                }
+                const existingData = await responseGet.json();
+
+                // 2. Check for duplicate email or roll number
+                const isDuplicate = existingData.some(entry => 
+                    (entry.Email && entry.Email.trim().toLowerCase() === userEmail) || 
+                    (entry.RollNo && entry.RollNo.trim().toLowerCase() === userRollNo)
+                );
+
+                if (isDuplicate) {
+                    errorMessage.textContent = "This Email or Roll No. is already registered.";
+                    errorMessage.classList.remove('hidden');
+                    return; // Stop the submission
+                }
+                
+                // 3. If no duplicate, proceed to submit new data
+                submitButton.innerHTML = 'Submitting...';
+                const responsePost = await fetch(sheetBestUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify([data]),
+                });
+
+                if (responsePost.ok) {
+                    registrationForm.style.display = 'none';
+                    successMessage.classList.remove('hidden');
+                    
+                    // **FIX:** Redirect to the Bingo website after a short delay
+                    setTimeout(() => {
+                        window.location.href = 'https://xpedition-tech-bingo.vercel.app/';
+                    }, 1500); // 1.5-second delay to show success message
+
+                } else {
+                    const errorData = await responsePost.json();
+                    throw new Error(errorData.detail || "An unknown error occurred during submission.");
+                }
+
+            } catch (error) {
+                console.error("Submission Process Error:", error);
+                errorMessage.textContent = error.message.includes("denied") 
+                    ? "Submission Failed: Check Google Sheet permissions." 
+                    : "An error occurred. Please try again.";
+                errorMessage.classList.remove('hidden');
+            } finally {
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            }
         });
 
         // --- Vanta.js and Typed.js Animations ---
@@ -228,3 +288,4 @@
     </script>
 </body>
 </html>
+
